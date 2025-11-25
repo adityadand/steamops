@@ -1,0 +1,88 @@
+// Run on https://help.steampowered.com/en/wizard/HelpWithTransaction?... 
+// Fetches ALL transactions in `ids` and downloads steam_item_prices.csv
+
+(async () => {
+  // 🔹 Put your transaction IDs here as STRINGS
+  const ids = [
+  #  "33733519778565650729",
+  # replace with ids like there here
+  ];
+
+  if (!Array.isArray(ids) || !ids.length) {
+    console.error('No IDs found.');
+    return;
+  }
+
+  console.log('Processing', ids.length, 'transactions…');
+
+  const results = [];
+
+  for (const id of ids) {
+    const url = `https://help.steampowered.com/en/wizard/HelpWithTransaction?transid=${id}`;
+    console.log('Fetching', url);
+
+    const res = await fetch(url, { credentials: 'include' });
+    const html = await res.text();
+
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+
+    // Each purchase block
+    const boxes = doc.querySelectorAll('.help_purchase_detail_box');
+
+    boxes.forEach(box => {
+      const dateEl = box.querySelector('.purchase_date');
+      const dateText = dateEl
+        ? dateEl.textContent.replace(/^Purchased:\s*/, '').trim()
+        : '';
+
+      const itemRows = box.querySelectorAll('.purchase_line_items > div');
+
+      itemRows.forEach(row => {
+        const nameEl  = row.querySelector('.purchase_detail_field');
+        const priceEl = row.querySelector('.refund_value span');
+
+        if (!nameEl || !priceEl) return;
+
+        const game  = nameEl.textContent.trim();
+        const price = priceEl.textContent.trim(); // e.g. "₹ 1,319"
+
+        if (!game || !price) return;
+
+        results.push({
+          transid: id,
+          date: dateText,
+          game,
+          price
+        });
+      });
+    });
+  }
+
+  console.log('Collected items:', results.length);
+
+  // Build CSV
+  let csv = 'transId,date,game,price\n';
+  csv += results.map(r => {
+    // prefix with tab so Excel treats transId as text, not a big number
+    const t = ('\t' + (r.transid || '')).replace(/"/g, '""');
+    const d = (r.date   || '').replace(/"/g, '""');
+    const g = (r.game   || '').replace(/"/g, '""');
+    const p = (r.price  || '').replace(/"/g, '""');
+    return `"${t}","${d}","${g}","${p}"`;
+  }).join('\n');
+
+  // Download as UTF-8 with BOM so Excel detects encoding correctly
+  const blob = new Blob(["\uFEFF" + csv], {
+    type: 'text/csv;charset=utf-8;'
+  });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = 'steam_item_prices.csv';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+
+  console.log('✅ Done. CSV downloaded as steam_item_prices.csv');
+})();
