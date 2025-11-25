@@ -1,0 +1,24 @@
+// Run on https://store.steampowered.com/account/history
+(function () {
+  const rows = Array.from(
+    document.querySelectorAll('.wallet_table_row[onclick*="HelpWithTransaction"]')
+  );
+
+  const ids = rows.map(row => {
+    const onclick = row.getAttribute('onclick') || '';
+    const m = onclick.match(/transid=(\d+)/);
+    return m ? m[1] : null;
+  }).filter(Boolean);
+
+  console.log('Found transaction IDs:', ids.length);
+
+  const json = JSON.stringify(ids);
+  try {
+    copy(json); // DevTools helper: copies to clipboard
+    console.log('✅ Copied ID array to clipboard.');
+  } catch (e) {
+    console.log('Copy failed, here is the array:\n' + json);
+  }
+
+  return ids;
+})();
