@@ -1,0 +1,81 @@
+/**
+ * STEAM LIBRARY EXPORTER
+ * * Instructions:
+ * 1. Navigate to https://steamcommunity.com/id/{YOUR_ID}/games/?tab=all
+ * 2. Paste this entire script into the Console (F12).
+ * 3. Press Enter.
+ * 4. The list is now in your clipboard! Paste it into Excel/Notepad.
+ */
+
+(function() {
+    // Method 1: Try to access Steam's internal data variable (rgGames).
+    // This is the best method as it gets ALL games instantly, even if they aren't scrolled into view.
+    if (typeof rgGames !== 'undefined' && Array.isArray(rgGames)) {
+        console.log(`Found internal game list containing ${rgGames.length} games...`);
+        
+        // Extract names and sort alphabetically
+        const gameNames = rgGames.map(game => game.name).sort();
+        const outputText = gameNames.join('\n');
+        
+        // Copy to clipboard
+        try {
+            copy(outputText);
+            console.log(`%cSUCCESS! Copied ${gameNames.length} games to clipboard.`, "color: green; font-weight: bold; font-size: 14px;");
+        } catch (e) {
+            navigator.clipboard.writeText(outputText).then(() => {
+                 console.log(`%cSUCCESS! Copied ${gameNames.length} games to clipboard.`, "color: green; font-weight: bold; font-size: 14px;");
+            });
+        }
+        
+    } else {
+        // Fallback Methods for scraping the DOM directly
+        console.warn("Internal list (rgGames) not found. Attempting to scrape visible elements...");
+
+        let gameNames = [];
+        let methodUsed = "";
+
+        // Method 2: Old Steam UI (Static list rows)
+        const oldUiElements = document.querySelectorAll('.gameListRowItemName');
+        if (oldUiElements.length > 0) {
+            gameNames = Array.from(oldUiElements).map(el => el.innerText.trim());
+            methodUsed = "Old UI Scrape";
+        } 
+        // Method 3: New React/Virtual Scroll UI (The HTML snippet you provided)
+        // Looks for: <div role="button"> -> <span> -> <a href="...">Game Name</a>
+        else {
+            const newUiElements = document.querySelectorAll('div[role="button"] > span > a');
+            if (newUiElements.length > 0) {
+                gameNames = Array.from(newUiElements)
+                    .map(el => el.innerText.trim())
+                    .filter(text => text.length > 0); // Filter out any empty captures
+                methodUsed = "New UI Scrape";
+            }
+        }
+
+        if (gameNames.length === 0) {
+            console.error("Error: No games found. Please ensure you are on the 'All Games' tab (URL should end in /games/?tab=all) and that you are logged in.");
+            return;
+        }
+
+        // Sort final list
+        gameNames.sort();
+        const outputText = gameNames.join('\n');
+
+        // Copy logic
+        const finalize = () => {
+            console.log(`%cSUCCESS! Scraped and copied ${gameNames.length} games using [${methodUsed}].`, "color: green; font-weight: bold; font-size: 14px;");
+            if (methodUsed === "New UI Scrape") {
+                console.warn("%cWARNING: This page uses 'Virtual Scrolling'. Only games currently rendered on the screen were captured. Scroll down to load more games and run this again, or try using the '/games/?tab=all' URL to force the older view.", "color: orange; font-weight: bold;");
+            }
+        };
+
+        try {
+            copy(outputText);
+            finalize();
+        } catch (e) {
+             navigator.clipboard.writeText(outputText).then(() => {
+                 finalize();
+            });
+        }
+    }
+})();
