@@ -1,0 +1,104 @@
+// https://www.epicgames.com/account/transactions/purchases
+(function() {
+    console.clear();
+    console.log("🚀 Starting SVG-Targeted Export...");
+
+    let allGames = [];
+    const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+    // The specific path data from the icon you provided
+    const NEXT_ARROW_PATH = "M8.97 4.47a.75.75 0 0 1 1.06 0L17.56 12l-7.53 7.53a.75.75 0 1 1-1.06-1.06L15.44 12 8.97 5.53a.75.75 0 0 1 0-1.06";
+
+    async function scrapeAndNavigate() {
+        let hasNextPage = true;
+        let pageCount = 1;
+
+        while (hasNextPage) {
+            console.log(`📄 Scraping Page ${pageCount}...`);
+
+            // --- 1. SCRAPE CURRENT PAGE ---
+            let rows = document.querySelectorAll('div[role="row"]'); 
+            if (rows.length === 0) rows = document.querySelectorAll('tr');
+
+            rows.forEach(row => {
+                let lines = row.innerText.split('\n').map(t => t.trim()).filter(t => t !== "");
+                
+                if (lines.length >= 3) {
+                    let date = lines[0] || "N/A";
+                    let statusIndex = lines.findIndex(l => l.match(/Purchased|Refunded|Free/i));
+                    let gameNameIndex = (statusIndex !== -1) ? statusIndex + 1 : 2;
+                    let game = lines[gameNameIndex];
+
+                    if (!game || game.includes("Epic Games Store")) {
+                         game = lines.reduce((a, b) => a.length > b.length ? a : b);
+                    }
+
+                    let price = lines.find(l => l.includes("₹") || l.includes("$") || l.includes("€") || l === "Free") || "0";
+                    let status = (statusIndex !== -1) ? lines[statusIndex] : "Unknown";
+
+                    // Prevent duplicates
+                    let uniqueID = date + game;
+                    if (!allGames.some(g => (g.date + g.game) === uniqueID)) {
+                        allGames.push({ date, game, price, status });
+                    }
+                }
+            });
+
+            // --- 2. FIND THE SPECIFIC SVG BUTTON ---
+            let nextBtn = null;
+            
+            // Get all buttons on page
+            let allButtons = Array.from(document.querySelectorAll('button'));
+            
+            for (let btn of allButtons) {
+                // Check if this button contains the specific SVG path
+                let svgPath = btn.querySelector('path');
+                if (svgPath) {
+                    let d = svgPath.getAttribute('d');
+                    // We check if the path starts with the same coordinates to be safe
+                    if (d && d.includes("M8.97 4.47")) {
+                        nextBtn = btn;
+                        break; 
+                    }
+                }
+            }
+
+            // --- 3. CLICK OR STOP ---
+            if (nextBtn && !nextBtn.disabled) {
+                console.log("➡️ Found Arrow Icon. Clicking...");
+                nextBtn.scrollIntoView({block: "center"});
+                nextBtn.click();
+                pageCount++;
+                await wait(3500); // Wait 3.5s for slow loading
+            } else {
+                console.log("🛑 No active 'Next' arrow found. Finished.");
+                hasNextPage = false;
+            }
+        }
+
+        generateCSV(allGames);
+    }
+
+    function generateCSV(data) {
+        let csvContent = "Date,Game Name,Price,Status\n";
+        data.forEach(item => {
+            let cleanGame = item.game.replace(/"/g, '""');
+            csvContent += `"${item.date}","${cleanGame}","${item.price}","${item.status}"\n`;
+        });
+
+        const BOM = "\uFEFF"; 
+        const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", "Epic_Games_Complete_Export.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        console.log(`🎉 DONE! Exported ${data.length} games.`);
+        alert(`Export Complete! Found ${data.length} games.`);
+    }
+
+    scrapeAndNavigate();
+})();
